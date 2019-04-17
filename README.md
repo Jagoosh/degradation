@@ -1,2 +1,2 @@
-# degradation
-One year industrial component degradation
+# One Year Industrial Component Degradation
+## Degration of a cutting blade

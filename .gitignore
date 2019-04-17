@@ -34,3 +34,7 @@ vignettes/*.pdf
 
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 rsconnect/
+
+# Source data files from https://www.kaggle.com/inIT-OWL/one-year-industrial-component-degradation
+oneyeardata/
+.Rproj.user
