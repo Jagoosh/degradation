@@ -26,3 +26,27 @@ colnames(df_data)
 df_tidy <- 
   df_data %>% 
   gather("variable", "value", -mode, -filenum, -timestamp, factor_key = T)
+
+# Оцениваем периодичность pCut::Actual_speed стандартными методами --------
+
+
+ts_test <- 
+  df_tidy %>% 
+  filter(
+    filenum == "000", 
+    variable == "pCut::CTRL_Position_controller::Actual_speed"
+  ) %>% 
+  select(value) %>% 
+  unlist(use.names = F) %>% 
+  ts(start = 0.008, frequency = 250)
+
+ts_test %>% 
+  spectrum(spans = 5)
+
+ts_test %>% 
+  stl(s.window = "per") %>% 
+  plot()
+
+ts_test %>% 
+  stats::filter(rep(1/652, 652)) %>% 
+  plot()
