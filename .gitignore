@@ -38,3 +38,6 @@ rsconnect/
 # Source data files from https://www.kaggle.com/inIT-OWL/one-year-industrial-component-degradation
 oneyeardata/
 .Rproj.user
+
+# Data from https://www.kaggle.com/inIT-OWL/one-year-industrial-component-degradation
+data/
