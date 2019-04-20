@@ -50,3 +50,18 @@ ts_test %>%
 ts_test %>% 
   stats::filter(rep(1/652, 652)) %>% 
   plot()
+
+# Отбираем VAX_speed с наименьшим sd --------------------------------------
+
+
+df_filtred <- 
+  df_tidy %>% 
+  group_by(mode, filenum, variable) %>% 
+  filter(
+    variable == "pSpintor::VAX_speed"
+  ) %>% 
+  summarise(sd = sd(value)) %>% 
+  filter(sd < 0.00001)
+
+df_filtred %>% 
+  summary()
