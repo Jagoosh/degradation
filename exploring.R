@@ -65,3 +65,55 @@ df_filtred <-
 
 df_filtred %>% 
   summary()
+
+# Оцениваем период и фазу колебаний pCut::Actual_speed---------------------
+
+
+get_period <- 
+  function(timestamp, variable) {
+  variable <- unlist(variable, use.names = F) %>% 
+    ts(start = min(timestamp), frequency = median(timestamp - lag(timestamp), na.rm = T))
+  value <- 
+    tibble(
+      pos = order(variable)[1:99] %>% sort(),
+      step = pos - lag(pos, default = first(pos)),
+      peak = cumsum(step > 10)
+    ) %>%
+    group_by(peak) %>%
+    summarise(pos = median(pos)) %>%
+    transmute(period = round(pos - lag(pos), 0)) %>%
+    unlist(use.names = F) %>%
+    mean(na.rm = T) %>% 
+    round(0) %>% 
+    as.integer()
+  return(value)
+}
+
+get_phase <- 
+  function(timestamp, variable) {
+  variable <- unlist(variable, use.names = F) %>% 
+    ts(start = min(timestamp), frequency = median(timestamp - lag(timestamp), na.rm = T))
+  tmp <- 
+    tibble(
+      pos = order(variable)[1:99] %>% sort(),
+      step = pos - lag(pos, default = first(pos)),
+      peak = cumsum(step > 10)
+    ) %>%
+    group_by(peak) %>%
+    summarise(pos = median(pos))
+  return(min(tmp$pos) %>% round(0) %>% as.integer())
+}
+
+df_oscillation <- 
+  df_tidy %>% 
+  filter(
+    filenum %in% df_filtred$filenum, 
+    variable == "pCut::CTRL_Position_controller::Actual_speed"
+  ) %>% 
+  group_by(filenum) %>% 
+  summarise(
+    ts_start = min(timestamp), 
+    ts_period = median(timestamp - lag(timestamp), na.rm = T), 
+    phase = get_phase(timestamp, value),
+    period = get_period(timestamp, value)
+  )
