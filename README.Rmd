@@ -1,0 +1,89 @@
+---
+title: "One Year Industrial Component Degradation"
+output: github_document
+editor_options: 
+  chunk_output_type: console
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r setup_project, echo = FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "README-"
+)
+
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(purrr)
+library(ggplot2)
+library(knitr)
+theme_set(theme_bw())
+```
+
+## Описание исходных данных
+
+https://www.kaggle.com/inIT-OWL/one-year-industrial-component-degradation
+
+```{r read_data}
+df_src <- 
+  map_df(
+    list.files(path = "oneyeardata", full.names = TRUE), 
+    function(filename) {
+      dt <- data.table::fread(filename)
+      # dt$filename <- str_sub(filename, 13, 34)
+      dt$mode <- str_sub(filename, 30, 34)
+      dt$filenum <- str_sub(filename, 26, 28)
+      return(dt)
+    }
+  )
+
+df_tidy <- 
+  df_src %>% 
+  gather(key = "variable", value = "value", -filenum, -mode, -timestamp) %>% 
+  group_by(filenum, variable)
+
+w <- as.integer(c(1, 3, 5, 7, 17, 31, 61, 127))
+
+smoothing <- 
+  map_df(w, function(xx) {
+    mutate(
+      df_tidy %>%
+        filter(filenum == "000"), 
+      window = xx, 
+      error = value - stats::filter(value, rep(1/xx, xx)) %>% as.numeric()
+    ) %>% 
+      summarise(window = first(window), sd_error = sd(error, na.rm = T))
+  })
+
+ggplot(smoothing, aes(x = window, y = sd_error)) + 
+  geom_line() + 
+  scale_x_log10(breaks = w) + 
+  scale_y_log10() + 
+  facet_wrap(~ variable, scales = "free_y")
+
+smooth <- 
+  map_df(w, function(xx) {
+    mutate(
+      df_tidy %>%
+        filter(filenum == "000", variable == "pCut::CTRL_Position_controller::Actual_speed"), 
+      window = xx, 
+      smooth = stats::filter(value, rep(1/xx, xx)) %>% as.numeric(),
+      error = value - smooth
+    )
+  })
+
+smooth %>% 
+  gather(
+    key = "type", value = "val", 
+    -filenum, -mode, -timestamp, -window, -variable
+  ) %>% 
+  ggplot(aes(x = timestamp, y = val)) + 
+  geom_line() + 
+  facet_grid(type ~ window, scales = "fixed")
+```
