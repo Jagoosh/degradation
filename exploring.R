@@ -3,8 +3,9 @@ library(tidyr)
 library(dplyr)
 library(stringr)
 library(purrr)
+library(broom)
 
-# Читаем исходные данные ---------------------------------------------
+# Читаем исходные данные --------------------------------------------------
 
 
 df_data <- 
@@ -12,7 +13,20 @@ df_data <-
     list.files(path = "data", pattern = "_mode.\\.csv", full.names = T), 
     function(filename) {
       # dt <- data.table::fread(filename)
-      dt <- read_csv(filename)
+      dt <- read_csv(
+        filename, 
+        col_types = c(
+          timestamp = col_double(),
+          `pCut::Motor_Torque` = col_double(),
+          `pCut::CTRL_Position_controller::Lag_error` = col_double(),
+          `pCut::CTRL_Position_controller::Actual_position` = col_integer(),
+          `pCut::CTRL_Position_controller::Actual_speed` = col_double(),
+          `pSvolFilm::CTRL_Position_controller::Actual_position` = col_integer(),
+          `pSvolFilm::CTRL_Position_controller::Actual_speed` = col_double(),
+          `pSvolFilm::CTRL_Position_controller::Lag_error` = col_double(),
+          `pSpintor::VAX_speed` = col_double()
+        )
+      )
       dt$filenum <- str_sub(filename, 19, 21)
       dt$mode <- str_sub(filename, 23, 27)
       return(dt)
@@ -66,43 +80,43 @@ df_filtred <-
 df_filtred %>% 
   summary()
 
-# Оцениваем период и фазу колебаний pCut::Actual_speed---------------------
+# Оцениваем период и фазу колебаний pCut::Actual_speed --------------------
 
 
 get_period <- 
   function(timestamp, variable) {
-  variable <- unlist(variable, use.names = F) %>% 
-    ts(start = min(timestamp), frequency = median(timestamp - lag(timestamp), na.rm = T))
-  value <- 
-    tibble(
-      pos = order(variable)[1:99] %>% sort(),
-      step = pos - lag(pos, default = first(pos)),
-      peak = cumsum(step > 10)
-    ) %>%
-    group_by(peak) %>%
-    summarise(pos = median(pos)) %>%
-    transmute(period = round(pos - lag(pos), 0)) %>%
-    unlist(use.names = F) %>%
-    mean(na.rm = T) %>% 
-    round(0) %>% 
-    as.integer()
-  return(value)
-}
+    variable <- unlist(variable, use.names = F) %>% 
+      ts(start = min(timestamp), frequency = median(timestamp - lag(timestamp), na.rm = T))
+    value <- 
+      tibble(
+        pos = order(variable)[1:99] %>% sort(),
+        step = pos - lag(pos, default = first(pos)),
+        peak = cumsum(step > 10)
+      ) %>%
+      group_by(peak) %>%
+      summarise(pos = median(pos)) %>%
+      transmute(period = round(pos - lag(pos), 0)) %>%
+      unlist(use.names = F) %>%
+      mean(na.rm = T) %>% 
+      round(0) %>% 
+      as.integer()
+    return(value)
+  }
 
 get_phase <- 
   function(timestamp, variable) {
-  variable <- unlist(variable, use.names = F) %>% 
-    ts(start = min(timestamp), frequency = median(timestamp - lag(timestamp), na.rm = T))
-  tmp <- 
-    tibble(
-      pos = order(variable)[1:99] %>% sort(),
-      step = pos - lag(pos, default = first(pos)),
-      peak = cumsum(step > 10)
-    ) %>%
-    group_by(peak) %>%
-    summarise(pos = median(pos))
-  return(min(tmp$pos) %>% round(0) %>% as.integer())
-}
+    variable <- unlist(variable, use.names = F) %>% 
+      ts(start = min(timestamp), frequency = median(timestamp - lag(timestamp), na.rm = T))
+    tmp <- 
+      tibble(
+        pos = order(variable)[1:99] %>% sort(),
+        step = pos - lag(pos, default = first(pos)),
+        peak = cumsum(step > 10)
+      ) %>%
+      group_by(peak) %>%
+      summarise(pos = median(pos))
+    return(min(tmp$pos) %>% round(0) %>% as.integer())
+  }
 
 df_oscillation <- 
   df_tidy %>% 
@@ -117,3 +131,27 @@ df_oscillation <-
     phase = get_phase(timestamp, value),
     period = get_period(timestamp, value)
   )
+
+# Определение параметров колебаний через lm() -----------------------------
+
+
+colnames(df_tidy)
+
+df_nest <- 
+  df_tidy %>% 
+  group_by(filenum, mode, variable) %>% 
+  nest()
+
+df_model <- 
+  df_nest %>% 
+  mutate(
+    model = data %>% 
+      map(function(df) {lm(value ~ timestamp, data = df)}), 
+    augment = model %>% 
+      map(augment)
+  )
+
+df_augment <- 
+  df_model %>% 
+  select(filenum, mode, variable, augment) %>% 
+  unnest()
